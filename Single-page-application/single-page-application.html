@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html>
+
+    <head>
+        <title>Single Page Application - Visualizzazione</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link rel="stylesheet" href="css/style.css">
+
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Raleway">
+        <link rel="stylesheet" href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
+
+
+        <style>
+            label, input { display:block; }
+            input.text { margin-bottom:12px; width:95%; padding: .4em; }
+            fieldset { padding:0; border:0; margin-top:25px; }
+            h1 { font-size: 1.2em; margin: .6em 0; }
+            div#users-contain { width: 350px; margin: 20px 0; }
+            div#users-contain table { margin: 1em 0; border-collapse: collapse; width: 100%; }
+            div#users-contain table td, div#users-contain table th { border: 1px solid #eee; padding: .6em 10px; text-align: left; }
+            .ui-dialog .ui-state-error { padding: .3em; }
+            .validateTips { border: 1px solid transparent; padding: 0.3em; }
+        </style>
+
+
+        <style>
+            body,h1 {font-family: "Raleway", sans-serif}
+            body, html {height: 100%}
+            .bgimg {
+                background-color: 	steelblue;
+                min-height: 100%;
+                background-position: center;
+                background-size: cover;
+            }
+        </style>
+
+
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+        <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/jcanvas/20.1.4/min/jcanvas.min.js"></script>
+        <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
+
+        <script type="text/javascript">
+
+        /* Variabili */
+        var start = true;
+        var modifyTag;
+        var modifica;
+
+        function doAjax() {
+
+
+            $.ajax({
+                    type: 'POST',
+                    url: 'http://127.0.0.1:8081/allLastPosizione',
+                    success: function (data) {
+                        console.log(data);
+
+                        var posizioni = JSON.parse(data);
+
+                        for(i in posizioni) { 
+                            $('#myCanvas').animateLayer(posizioni[i].email, null, 1000, function(layer) { // Callback function
+                                $(this).animateLayer(layer, {
+                                    fillStyle: 'red',
+                                    x: posizioni[i].x, y: posizioni[i].y,
+                                    shadowColor: 'darkred',
+                                    shadowBlur: 10,
+                                    opacity: 1
+                                }, 'slow', 'ease-in-out');
+                            });
+                            $('#myCanvas').animateLayer('Text' + posizioni[i].email, null, 1000, function(layer) { // Callback function
+                                $(this).animateLayer(layer, {
+                                    //fillStyle: 'red',
+                                    x: posizioni[i].x, y: posizioni[i].y - 20,
+                                    //shadowColor: 'darkred',
+                                    shadowBlur: 10,
+                                    opacity: 1
+                                }, 'slow', 'ease-in-out');
+                            });
+                            $('#myCanvas').setLayer('Text' + posizioni[i].email, {
+                                text: posizioni[i].email + '\n' + posizioni[i].datetime.substring(0, 10) + ' ' + posizioni[i].datetime.substring(11,19)
+                            })
+                            .drawLayers();
+                        }
+
+
+
+
+
+                        // // Animate the circle layer 
+                        // $('#myCanvas').animateLayer('android', null/*{
+                        //     x: data[0].Posizione_X, y: data[0].Posizione_Y,
+                        //     radius: 10,
+                        //     }*/, 1000, function(layer) { // Callback function
+                        //     $(this).animateLayer(layer, {
+                        //         fillStyle: 'red',
+                        //         x: posizione.x, y: posizione.y,
+                        //         shadowColor: 'darkred',
+                        //         shadowBlur: 10,
+                        //         opacity: 1
+                        //     }, 'slow', 'ease-in-out');
+                        // });
+
+                        // $("#risultato").text('Ultima posizione rilevata (x:' + posizione.x + ' y:' + posizione.y + ') alle ore: ' + posizione.datetime);
+                    },
+                    complete: function (data) {
+
+                        // Schedule the next
+                        if(start) {
+                            setTimeout(doAjax, 2000);
+                        }
+                    }
+            });
+        }
+
+        /* Disegna i tag presenti nel database*/
+        function drawTag(tela) {
+            $.ajax({
+                type: 'GET',
+                url: "http://127.0.0.1:8081/listTag",
+                success: function(result){
+
+                    var tag = JSON.parse(result);
+
+                    for(i in tag) {
+
+                        $('#select-lista-tag').append($('<option>', {
+                                value: tag[i].mac,
+                                text: tag[i].nome
+                            })
+                        );
+
+                        tela.addLayer({
+                            type: 'arc',
+                            name: tag[i].nome,
+                            fillStyle: 'lime',
+                            strokeStyle: '#000',
+                            strokeWidth: 2,
+                            shadowColor: '#000',
+                            shadowBlur: 10,
+                            groups: [tag[i].mac],
+                            x: tag[i].x, y: tag[i].y,
+                            radius: 5
+                        })
+                        .drawText({
+                            layer: true,
+                            name: 'Text' + tag[i].nome,
+                            fillStyle: 'black',
+                            x: tag[i].x, y: tag[i].y + 14,
+                            fontSize: '10pt',
+                            fontFamily: 'Verdana, sans-serif',
+                            text: tag[i].nome,
+                            groups: [tag[i].mac]
+                        })
+
+                    }
+                    tela.drawLayers();
+                }
+            });
+        }
+
+
+
+        $(function() {
+
+            /* Variabili */
+            var newTag = new Object();
+            modifica = false;
+
+            /* Nascondi i button */
+            $('#confermaSensore').hide();
+            $('#annullaSensore').hide();
+            $('#stop').hide();
+
+
+
+            /* Gestore evento click del button */
+            $('#start').click(function() {
+                $('#start').hide();
+                $('#stop').show();
+
+                /* Recupero la lista degli utenti presenti nelle posizioni */
+                $.ajax({
+                    type: 'POST',
+                    url: 'http://127.0.0.1:8081/allLastPosizione',
+                    success: function (data) {
+                    },
+                    complete: function (data) {
+
+                        var dati = JSON.parse(data.responseText);
+                        console.log(dati);
+
+                        for(i in dati) {
+                            $('#myCanvas')
+                            .drawArc({
+                                name: dati[i].email,
+                                layer: true,
+                                bringToFront: true,
+                                fillStyle: 'red',
+                                strokeStyle: '#000',
+                                strokeWidth: 2,
+                                shadowColor: '#000',
+                                shadowBlur: 10,
+                                fillStyle: 'red',
+                                x: dati[i].x, y: dati[i].y,
+                                radius: 5,
+                                groups: [dati[i].email],
+                                mouseover: function(layer) {
+                                    $(this).setLayer('Text' + layer.name, {
+                                        visible: true
+                                    })
+                                    .drawLayers();
+                                },
+                                mouseout: function(layer) {
+                                    $(this).setLayer('Text' + layer.name, {
+                                        visible: false
+                                    })
+                                    .drawLayers();
+                                }
+                            })
+                            .drawText({
+                                visible: false,
+                                layer: true,
+                                name: 'Text' + dati[i].email,
+                                fillStyle: 'black',
+                                fontStyle: 'bold',
+                                x: dati[i].x, y: dati[i].y - 20,
+                                fontSize: '10pt',
+                                fontFamily: 'Verdana, sans-serif',
+                                text: dati[i].email + '\n' + dati[i].datetime.substring(0, 10) + ' ' + dati[i].datetime.substring(11,19),
+                                groups: [dati[i].email]
+                            })
+
+                        }
+                    }
+                });
+
+                start = true;
+                
+                doAjax();
+            });
+
+            /* Gestore evento click del button */
+            $('#stop').click(function() {
+                $('#start').show();
+                $('#stop').hide();
+
+                start = false;
+            });
+
+
+            /* Gestore evento click del button */
+            $('#addSensore').click(function() {
+                $('#new-tag-dialog').dialog( "open" );
+            });
+
+
+            // Store the canvas object into a variable
+            var myCanvas = $('#myCanvas');
+
+            drawTag(myCanvas);
+
+            myCanvas.addLayer({
+                type: 'image',
+                source: 'img/piantina-ambiente-indoor.png',
+                x: 325, y: 310,
+                scale: 0.98
+            });
+
+            myCanvas.drawLayers();
+
+            
+
+
+
+
+            dialogNewTag = $( "#new-tag-dialog" ).dialog({
+                autoOpen: false,
+                height: 400,
+                width: 350,
+                modal: true,
+                buttons: {
+                    'Inserisci TAG': function() {
+                        newTag.nome = $('#name').val();
+                        newTag.piano = $('#piano').val();
+                        newTag.mac = $('#mac').val();
+
+                        dialogNewTag.dialog('close');
+
+                        $('#addSensore').hide();
+                        $('#modificaSensore').hide();
+                        $('#confermaSensore').show();
+                        $('#annullaSensore').show();
+
+                        $('canvas')
+                        .drawArc({
+                            name: 'newTagArc',
+                            layer: true,
+                            draggable: true,
+                            bringToFront: true,
+                            fillStyle: 'blu',
+                            strokeStyle: '#000',
+                            strokeWidth: 2,
+                            shadowColor: '#000',
+                            shadowBlur: 10,
+                            fillStyle: '#36c',
+                            groups: ['newTag'],
+                            dragGroups: ['newTag'],
+                            x: 150, y: 150,
+                            radius: 5
+                        })
+                        .drawText({
+                            layer: true,
+                            fillStyle: 'black',
+                            x: 150, y: 164,
+                            fontSize: '10pt',
+                            fontFamily: 'Verdana, sans-serif',
+                            groups: ['newTag'],
+                            dragGroups: ['newTag'],
+                            text: newTag.nome
+                        })
+
+                    },
+                    'Annulla': function() {
+                        dialogNewTag.dialog('close');
+                    }
+                },
+                close: function() {
+                    $('#form-new-tag')[0].reset();
+                    /*allFields.removeClass( "ui-state-error" );*/
+                }
+            });
+
+
+            /* Gestore evento click del button */
+            $('#confermaSensore').click(function() {
+
+                if(modifica) {
+
+                    var tela = $('canvas').getLayer(modifyTag.nome);
+
+                    newTag.mac = modifyTag.mac;
+                    newTag.x = tela.x;
+                    newTag.y = tela.y;
+
+                    $.ajax({
+                        type: 'POST',
+                        url: "http://127.0.0.1:8081/updateTag",
+                        dataType: 'json',
+                        data: newTag,
+                        beforeSend: function() {
+                            alert('Aggiornato tag: ' + modifyTag.nome);
+
+                            $('#myCanvas').setLayerGroup(modifyTag.mac, {
+                                draggable: false,
+                                dragGroups: ['']
+                            })
+                            .drawLayers();
+                            modifica = false;
+                        }
+                    })
+
+
+                }
+                else {
+                    var tela = $('canvas').getLayer('newTagArc');
+
+                    newTag.x = tela.x;
+                    newTag.y = tela.y;
+
+                    $.ajax({
+                        type: 'POST',
+                        url: "http://127.0.0.1:8081/addTag",
+                        dataType: 'json',
+                        data: newTag,
+                        beforeSend: function() {
+                            alert('Aggiunto tag: ' + newTag.nome);
+
+                            $('#select-lista-tag').append($('<option>', {
+                                    value: newTag.mac,
+                                    text: newTag.nome
+                                })
+                            );
+
+                            $('canvas').removeLayerGroup('newTag');
+
+
+                            myCanvas.addLayer({
+                                type: 'arc',
+                                name: newTag.nome,
+                                fillStyle: 'lime',
+                                strokeStyle: '#000',
+                                strokeWidth: 2,
+                                shadowColor: '#000',
+                                shadowBlur: 10,
+                                groups: [newTag.mac],
+                                x: newTag.x, y: newTag.y,
+                                radius: 5
+                            })
+                            .drawText({
+                                layer: true,
+                                name: 'Text' + newTag.nome,
+                                fillStyle: 'black',
+                                x: newTag.x, y: newTag.y + 14,
+                                fontSize: '10pt',
+                                fontFamily: 'Verdana, sans-serif',
+                                text: newTag.nome,
+                                groups: [newTag.mac]
+                            })
+                        }
+                    })
+
+                }
+
+                $('#addSensore').show();
+                $('#modificaSensore').show();
+                $('#confermaSensore').hide();
+                $('#annullaSensore').hide();
+
+
+            });
+
+
+            /* Gestore evento click del button */
+            $('#annullaSensore').click(function() {
+                if (modifica) {
+                    $('#myCanvas').setLayerGroup(modifyTag.mac, {
+                        draggable: false,
+                        dragGroups: ['']
+                    })
+                    .drawLayers();
+                    modifica = false;
+                }
+                else {
+                    $('canvas').removeLayerGroup('newTag');
+                }
+                $('#addSensore').show();
+                $('#modificaSensore').show();
+                $('#confermaSensore').hide();
+                $('#annullaSensore').hide();
+            });
+
+
+            dialogManageTag = $( "#list-tag-dialog" ).dialog({
+                autoOpen: false,
+                height: 400,
+                width: 360,
+                modal: true,
+                buttons: {
+                    'Modifica Posizione': function() {
+                        modifica = true;
+
+                        modifyTag = new Object();
+
+                        modifyTag.mac = $("#select-lista-tag").find(":selected").val();
+                        modifyTag.nome = $("#select-lista-tag").find(":selected").text();
+
+                        $('#myCanvas').setLayerGroup(modifyTag.mac, {
+                            draggable: true,
+                            dragGroups: [modifyTag.mac]
+                        })
+                        .drawLayers();
+
+                        $('#addSensore').hide();
+                        $('#modificaSensore').hide();
+                        $('#confermaSensore').show();
+                        $('#annullaSensore').show();
+
+
+                        dialogManageTag.dialog('close');
+                        // recupero il layer del tag selezionato
+
+                        // rendo draggable il layer
+                        // confermo l'inserimento
+                        // aggiorno il tag
+
+                    },
+
+
+                    'Elimina TAG': function() {
+
+                        var tag = new Object();
+
+                        tag.mac = $("#select-lista-tag").find(":selected").val();
+                        tag.nome = $("#select-lista-tag").find(":selected").text();
+
+                        $.ajax({
+                            type: 'DELETE',
+                            url: "http://127.0.0.1:8081/deleteTag",
+                            dataType: 'json',
+                            data: tag,
+                            success: function(result){
+                                $("#select-lista-tag option[value='" + tag.mac + "']").remove();
+                                alert('Eliminato tag: ' + tag.nome);
+                            }
+                        })
+
+                        myCanvas.removeLayerGroup(tag.mac);
+
+                        dialogManageTag.dialog('close');
+                    },
+                    'Annulla': function() {
+                        dialogManageTag.dialog('close');
+                    }
+                },
+                close: function() {
+                    /*$('#list-tag-dialog')[0].reset();
+                    allFields.removeClass( "ui-state-error" );*/
+                }
+            });
+
+
+            /* Gestore evento click del button */
+            $('#modificaSensore').click(function() {
+                $('#list-tag-dialog').dialog( "open" );
+            });
+
+        })
+        </script>
+    </head>
+
+    <body>
+
+
+        <div id="new-tag-dialog" title="Inserisci Nuovo TAG">
+            <p class="validateTips">Tutti i campi sono obbligatori.</p>
+            
+            <form id="form-new-tag">
+                <fieldset>
+                <label for="name">Nome</label>
+                <input type="text" name="name" id="name" class="text ui-widget-content ui-corner-all">
+                <label for="piano">Piano</label>
+                <input type="text" name="piano" id="piano" class="text ui-widget-content ui-corner-all">
+                <label for="mac">MAC</label>
+                <input type="text" name="mac" id="mac" class="text ui-widget-content ui-corner-all">
+            
+                <!-- Allow form submission with keyboard without duplicating the dialog button -->
+                <input type="submit" tabindex="-1" style="position:absolute; top:-1000px">
+                </fieldset>
+            </form>
+        </div>
+
+
+        <div id="list-tag-dialog" title="Modifica TAG">
+            
+            <form>
+                <fieldset>
+                    Seleziona il TAG:
+                    <select id="select-lista-tag" name="lista-tag" form="tag">
+                    </select>
+            
+                <!-- Allow form submission with keyboard without duplicating the dialog button -->
+                <input type="submit" tabindex="-1" style="position:absolute; top:-1000px">
+                </fieldset>
+            </form>
+        </div>
+
+
+        <div class="bgimg w3-display-container w3-animate-opacity w3-text-white">
+
+            <div class="w3-display-topleft w3-padding-large w3-xlarge">
+                Single Page Application
+            </div>
+
+            <div class="w3-display-topmiddle">
+                <h1 class="w3-jumbo w3-animate-top">Ambiente Indoor</h1>
+                <hr class="w3-border-grey" style="margin:auto;width:40%">
+                <p class="w3-large w3-center">
+                    <button id="start">Avvia Visualizzazione</button>
+                    <button id="stop">Stop Visualizzazione</button>
+                    <button id="addSensore">Inserisci Sensore</button>
+                    <button id="modificaSensore">Modifica Sensore</button>
+                    <button id="confermaSensore">Conferma Posizionamento</button>
+                    <button id="annullaSensore">Annulla Inserimento</button>
+                </p>
+            </div>
+
+            <div class="w3-display-bottommiddle">
+
+                <canvas id="myCanvas" width="670" height="620" style="background-color: 	lightskyblue">
+                    <p>
+                        Questo è un contenuto di riserva
+                        per gli utenti di tecnologie assistive
+                        o di browser che non hanno
+                        pieno supporto per l'API Canvas.
+                    </p>
+                </canvas>
+
+                <div style="text-align: center">
+                    <br>
+                    &copy; Dicembre 2017
+                    <br>
+                </div>
+
+            </div>
+
+        </div>
+
+    </body>
+
+</html>
